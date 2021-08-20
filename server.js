@@ -1,9 +1,8 @@
 //載入 server 程式所需要的相關套件
-
 var express = require('express')
 var app = express()
 var cors = require('cors')
-var bodyParser = require('body-parser')
+// var bodyParser = require('body-parser')
 var morgan = require('morgan')
 var mongoose = require('mongoose')
 //載入 jwt函式庫
@@ -12,11 +11,13 @@ var jwt = require('jsonwebtoken')
 var config = require('./config')
 //載入資料模型
 var User = require('./app/models/user')
+//加密
+var bcrypt = require('bcryptjs');
 
 var port = process.env.PORT || 3000
 // mongoose.connect(config.database)
 mongoose.connect('mongodb://localhost/jwt_dev')
-app.set('secret', config.secret)
+app.set('secret', config.secret) //自訂密鑰
 
 //套用 middleware
 app.use(express.urlencoded({extended: false}))
@@ -28,30 +29,36 @@ app.get('/', function(req, res){
     res.send('Hi, The API is at http://localhost:' + port + '/api')
 })
 
-
-app.get('/setup', function(req, res) {
-    var andyyou = new User({
-        name: 'andyyou',
-        password: '12345678',
-        admin: true
-    })
-    andyyou.save(function (err) {
-        if (err) throw err
-
-        console.log('User saved successfully')
-        res.json({success: true})
-    })
-})
+// saltRounds: 整數型態，數值越高越安全。
+// myPassword: 要加密的字串。
+// testPassword: 測試驗證密碼的變數。
+// myHash: myPassword加密後結果(給驗證用)
 
 var api = express.Router()
 // TODO: authenticate
 // TODO: verify token
+api.post('/signUp', function(req, res) {
+    //加密 sync同步寫法
+    bcrypt.hash(req.body.password, 10).then(function (pwHash) {
+
+        // bcrypt.hashSync(req.body.password, 10)
+        var andyyou = new User({
+            name: req.body.name,
+            password: pwHash,
+            admin: true
+        })
+        andyyou.save(function (err) {
+            if (err) throw err
+    
+            console.log('User saved successfully')
+            res.json({success: true})
+        })
+    });
+})
 
 api.get('/', function (req, res) {
     res.json({message: 'Welcome to the APIs'})
 })
-
-
 
 
 //無須被 middleware 驗證
@@ -64,19 +71,33 @@ api.post('/authenticate', function(req, res) {
         if (!user) {
             res.json({ success: false, message: 'Authenticate failed. User not found'})
         }else if (user) {
-            if (user.password != req.body.password) {
-                res.json({ success: false, message: 'Authenticate failed. Wrong password'})
-            }else {
-                var token = jwt.sign({user}, app.get('secret'), {
-                    expiresIn: 60*60*24
+            // user.password != req.body.password
+            console.log('DB password:', user.password);
+            console.log('re password:', req.body.password);
+            // bcrypt.hash(req.body.password, 10, function(err, hash) {
+            //     if (err) {throw (err);}
+            //     bcrypt.compare(req.body.password, hash).then(hashRes => {
+            //         console.log('hashRes:', hashRes);
+            //     })
+            // })
+                bcrypt.compare(req.body.password, user.password).then(hash => {
+                    console.log('Hash:', hash);
+                    if (!hash) {
+                        res.json({ success: false, message: 'Authenticate failed. Wrong password'})
+                    }else {
+                        var token = jwt.sign({user}, app.get('secret'), {
+                            // algorithm / noTimestamp
+                            expiresIn: 60*60*24 //過期時間
+                        })
+        
+                        res.json({
+                            success: true,
+                            message: 'Enjoy your token',
+                            token: token,
+                        })
+                    }
                 })
 
-                res.json({
-                    success: true,
-                    message: 'Enjoy your token',
-                    token: token,
-                })
-            }
         }
     })
 })

@@ -1,5 +1,5 @@
 module.exports = {
-    'secret': 'ilovera',
+    'secret': 'Pretso',
     'database': 'mongodb://localhost/jwt_dev',
     // 'useUnifiedTopology':'true'
 }

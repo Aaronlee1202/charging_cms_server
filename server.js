@@ -35,25 +35,41 @@ app.get('/', function(req, res){
 // myHash: myPassword加密後結果(給驗證用)
 
 var api = express.Router()
-// TODO: authenticate
-// TODO: verify token
-api.post('/signUp', function(req, res) {
-    //加密 sync同步寫法
-    bcrypt.hash(req.body.password, 10).then(function (pwHash) {
 
-        // bcrypt.hashSync(req.body.password, 10)
-        var andyyou = new User({
-            name: req.body.name,
-            password: pwHash,
-            admin: true
-        })
-        andyyou.save(function (err) {
-            if (err) throw err
-    
-            console.log('User saved successfully')
-            res.json({success: true})
-        })
-    });
+//要加上如果傳來帳密是空值的判斷
+api.post('/signUp', function(req, res) {
+    console.log('註冊', req.body);
+    const Account = req.body.account;
+    const Password = req.body.password;
+    const msg = {success: null, status: null};
+    try {
+        if (Account != '' && Password != '') {
+            //加密 sync非同步寫法
+            bcrypt.hash(Password, 10).then(function (pwHash) {
+                var userData = new User({
+                    account: Account,
+                    password: pwHash,
+                    admin: true
+                })
+                userData.save(
+                    console.log('User saved successfully'),
+                    msg.success = true,
+                    msg.status = '註冊成功',
+                    res.json(msg)
+                )
+            });
+        }
+        else {
+            throw "請輸入帳號密碼";
+        }
+    }
+    catch(e) {
+        if (e) throw e.message
+        console.log(e.message);
+        msg.success = false,
+        msg.status = '請輸入帳號密碼',
+        res.json(msg)
+    }
 })
 
 api.get('/', function (req, res) {
@@ -63,23 +79,16 @@ api.get('/', function (req, res) {
 
 //無須被 middleware 驗證
 api.post('/authenticate', function(req, res) {
+    console.log('登入', req.body);
     User.findOne({
-        name: req.body.name
+        account: req.body.account
     }, function (err, user) {
         if (err) throw err
-
         if (!user) {
             res.json({ success: false, message: 'Authenticate failed. User not found'})
         }else if (user) {
-            // user.password != req.body.password
             console.log('DB password:', user.password);
             console.log('re password:', req.body.password);
-            // bcrypt.hash(req.body.password, 10, function(err, hash) {
-            //     if (err) {throw (err);}
-            //     bcrypt.compare(req.body.password, hash).then(hashRes => {
-            //         console.log('hashRes:', hashRes);
-            //     })
-            // })
                 bcrypt.compare(req.body.password, user.password).then(hash => {
                     console.log('Hash:', hash);
                     if (!hash) {
@@ -121,13 +130,14 @@ api.use(function (req, res, next) {
         })
     }
 })
+app.use('/api', api)
+
 api.get('/users', function (req, res) {
     User.find({}, function (err, users) {
         res.json(users)
     })
 })
 
-app.use('/api', api)
 
 app.listen(port, function() {
     console.log('The server is running at http://localhost:' + port)
